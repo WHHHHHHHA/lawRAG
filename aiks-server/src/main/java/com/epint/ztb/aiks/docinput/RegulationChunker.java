@@ -26,13 +26,16 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class RegulationChunker {
 
+    /** 行首空白：\s 不含全角空格(U+3000)/不换行空格(U+00A0)，中文文档行首缩进常用，需显式包含 */
+    private static final String LINE_HEAD_SPACES = "[\\s\\u3000\\u00A0]{0,8}";
+
     /** 匹配"第X章 标题"行 */
     private static final Pattern CHAPTER_PATTERN =
-            Pattern.compile("(?m)^\\s{0,8}第[一二三四五六七八九十百千零〇0-9]+章[^\\n]{0,100}");
+            Pattern.compile("(?m)^" + LINE_HEAD_SPACES + "第[一二三四五六七八九十百千零〇0-9]+章[^\\n]{0,100}");
 
     /** 匹配"第X条"行首（捕获条款号） */
     private static final Pattern ARTICLE_PATTERN =
-            Pattern.compile("(?m)^\\s{0,8}(第[一二三四五六七八九十百千零〇0-9]+条)");
+            Pattern.compile("(?m)^" + LINE_HEAD_SPACES + "(第[一二三四五六七八九十百千零〇0-9]+条)");
 
     private final AiksProperties props;
 
@@ -66,7 +69,7 @@ public class RegulationChunker {
         // 首条之前的前言（目录/总说明），足够长才独立成块
         int firstStart = articleStarts.get(0)[0];
         if (firstStart > 0) {
-            String preamble = normalized.substring(0, firstStart).trim();
+            String preamble = stripSpaces(normalized.substring(0, firstStart));
             if (preamble.length() >= minChunkTokens()) {
                 result.add(new Chunk(preamble, null, currentChapterFor(chapterPos, normalized, 0)));
             }
@@ -75,7 +78,7 @@ public class RegulationChunker {
         for (int i = 0; i < articleStarts.size(); i++) {
             int start = articleStarts.get(i)[0];
             int end = i + 1 < articleStarts.size() ? articleStarts.get(i + 1)[0] : normalized.length();
-            String content = normalized.substring(start, end).trim();
+            String content = stripSpaces(normalized.substring(start, end));
             if (content.isEmpty()) {
                 continue;
             }
@@ -131,12 +134,17 @@ public class RegulationChunker {
         chunks.addAll(merged);
     }
 
+    /** 去除首尾空白（含全角空格，String.trim() 不处理 U+3000/U+00A0） */
+    private static String stripSpaces(String s) {
+        return s.replaceAll("^[\\s\\u3000\\u00A0]+|[\\s\\u3000\\u00A0]+$", "");
+    }
+
     /** 找到位置 pos 之前最近的章标题 */
     private String currentChapterFor(List<int[]> chapterPos, String text, int pos) {
         String latest = null;
         for (int[] cp : chapterPos) {
             if (cp[0] < pos) {
-                latest = text.substring(cp[0], cp[1]).trim();
+                latest = stripSpaces(text.substring(cp[0], cp[1]));
             } else {
                 break;
             }

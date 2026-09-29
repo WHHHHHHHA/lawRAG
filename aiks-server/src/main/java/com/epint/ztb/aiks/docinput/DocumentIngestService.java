@@ -130,9 +130,14 @@ public class DocumentIngestService {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put(META_DOC_GUID, doc.getDocGuid());
         metadata.put(META_LAW_NAME, doc.getLawName() != null ? doc.getLawName() : doc.getDocName());
-        metadata.put(META_ARTICLE_NO, c.getArticleNo());
-        metadata.put(META_CHAPTER_NAME, c.getChapterName());
         metadata.put(META_DOC_NAME, doc.getDocName());
+        // 兜底分块（TokenTextSplitter）的 chunk 无条款号/章节名；Spring AI Document 不允许 metadata 含 null 值，空值跳过
+        if (c.getArticleNo() != null) {
+            metadata.put(META_ARTICLE_NO, c.getArticleNo());
+        }
+        if (c.getChapterName() != null) {
+            metadata.put(META_CHAPTER_NAME, c.getChapterName());
+        }
         return Document.builder().id(chunkGuid).text(c.getContent()).metadata(metadata).build();
     }
 
@@ -180,7 +185,9 @@ public class DocumentIngestService {
     }
 
     public static Path rawFilePath(DocInfo doc) {
-        return Paths.get("data", "rawfiles", doc.getDocGuid() + "." + doc.getFileExt());
+        // 必须转为绝对路径：MultipartFile.transferTo 会把相对 File 解析到 Tomcat 上传临时目录，
+        // 而 Files.* 解析到进程工作目录（项目目录），相对路径两边不一致导致保存失败。
+        return Paths.get("data", "rawfiles", doc.getDocGuid() + "." + doc.getFileExt()).toAbsolutePath();
     }
 
     public static String newGuid() {
