@@ -1,0 +1,81 @@
+server:
+  port: 9093
+
+spring:
+  application:
+    name: aiks-server
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+  datasource:
+    # 独立 MySQL 库 aiks（不复用平台库），建库脚本见 resources/schema-aiks.sql
+    url: jdbc:mysql://${AIKS_DB_HOST:localhost}:${AIKS_DB_PORT:3306}/aichat?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${AIKS_DB_USER:root}
+    password: ${AIKS_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.epint.ztb.aiks: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId}] %logger{40} - %msg%n"
+
+aiks:
+  # 对话模型（OpenAI 兼容）：DeepSeek=https://api.deepseek.com 通义=https://dashscope.aliyuncs.com/compatible-mode 智谱=https://open.bigmodel.cn/api/paas/v4
+  chat:
+    base-url: ${AIKS_CHAT_BASEURL:https://ark.cn-beijing.volces.com/api/plan/v3}
+    api-key: ${AIKS_CHAT_APIKEY:}
+    model: ${AIKS_CHAT_MODEL:ark-code-latest}
+    temperature: 0.1
+    max-tokens: 2048
+    timeout-ms: 120000
+  # 向量模型（可与 chat 指向不同厂商）
+  embedding:
+    base-url: ${AIKS_EMBED_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    api-key: ${AIKS_EMBED_APIKEY:}
+    model: ${AIKS_EMBED_MODEL:qwen3.7-text-embedding}
+    dimensions: 1024
+    timeout-ms: 60000
+    # 单次 embedding 请求的文档数（DashScope 兼容模式批量上限 10）
+    batch-size: 10
+  # 向量库：simple=SimpleVectorStore+JSON 文件持久化（第一期）；redis/milvus 预留
+  vectorstore:
+    type: simple
+    simple-file: data/aiks-vector.json
+  rag:
+    top-k: 6
+    similarity-threshold: 0.55
+    history-max-messages: 20
+  security:
+    # 平台侧（ztb-aiks-impl）调用本服务的静态令牌，走环境变量注入
+    api-key: ${AIKS_SERVER_APIKEY:change-me-please}
+    rate-limit-per-user-per-min: 6
+    global-qpm: 60
+    sensitive-check-enabled: true
+  ingest:
+    # 提取文本少于此字符数视为扫描件/空文件
+    min-text-chars: 500
+    # 单条法规条款超过此 token 估算值时二次切分
+    article-max-tokens: 800
+    # 非法规结构文本的兜底分块（token）
+    fallback-chunk-size: 1000
+    # 小于该 token 估算值的碎块并入相邻块
+    min-chunk-tokens: 50
