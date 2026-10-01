@@ -41,7 +41,7 @@ logging:
 aiks:
   # 对话模型（OpenAI 兼容）：DeepSeek=https://api.deepseek.com 通义=https://dashscope.aliyuncs.com/compatible-mode 智谱=https://open.bigmodel.cn/api/paas/v4
   chat:
-    base-url: ${AIKS_CHAT_BASEURL:https://ark.cn-beijing.volces.com/api/plan/v3}
+    base-url: ${AIKS_CHAT_BASEURL:https://ark.cn-beijing.volces.com/api/plan}
     api-key: ${AIKS_CHAT_APIKEY:}
     model: ${AIKS_CHAT_MODEL:ark-code-latest}
     temperature: 0.1
@@ -49,7 +49,7 @@ aiks:
     timeout-ms: 120000
   # 向量模型（可与 chat 指向不同厂商）
   embedding:
-    base-url: ${AIKS_EMBED_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    base-url: ${AIKS_EMBED_BASEURL:https://dashscope.aliyuncs.com/compatible-mode}
     api-key: ${AIKS_EMBED_APIKEY:}
     model: ${AIKS_EMBED_MODEL:qwen3.7-text-embedding}
     dimensions: 1024
@@ -63,7 +63,10 @@ aiks:
   rag:
     top-k: 6
     similarity-threshold: 0.55
+    # 会话历史窗口消息数（读侧裁剪）
     history-max-messages: 20
+    # 检索 0 命中时兜底回答的最大 token 数（寒暄引导/未命中提示均为短回答）
+    fallback-max-tokens: 256
   security:
     # 平台侧（ztb-aiks-impl）调用本服务的静态令牌，走环境变量注入
     api-key: ${AIKS_SERVER_APIKEY:change-me-please}
