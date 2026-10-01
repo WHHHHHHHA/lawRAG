@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS aiks_chat_message (
     role            VARCHAR(10)  NOT NULL COMMENT 'user/assistant',
     content         MEDIUMTEXT   NOT NULL COMMENT '消息内容',
     ref_doc_guids   VARCHAR(500) DEFAULT NULL COMMENT '回答引用的文档GUID(逗号分隔)',
+    ref_json        MEDIUMTEXT   DEFAULT NULL COMMENT '回答引用详情JSON([{refNo,docGuid,lawName,articleNo,chapterName,snippet,score}])',
     prompt_tokens   INT          DEFAULT NULL,
     completion_tokens INT        DEFAULT NULL,
     latency_ms      INT          DEFAULT NULL,
@@ -71,6 +72,9 @@ CREATE TABLE IF NOT EXISTS aiks_chat_message (
     UNIQUE KEY uk_seq (seq),
     KEY idx_session_guid (session_guid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问答消息留痕表(仅追加,不重写)';
+
+-- 已有库升级（ref_json：历史会话回看时还原〔n〕对应的具体法规条款出处）：
+-- ALTER TABLE aiks_chat_message ADD COLUMN ref_json MEDIUMTEXT DEFAULT NULL COMMENT '回答引用详情JSON' AFTER ref_doc_guids;
 
 CREATE TABLE IF NOT EXISTS aiks_llm_usage_log (
     log_guid        VARCHAR(50)  NOT NULL,

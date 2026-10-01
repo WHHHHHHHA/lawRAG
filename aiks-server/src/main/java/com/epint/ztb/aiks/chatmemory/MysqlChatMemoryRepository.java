@@ -39,6 +39,8 @@ public class MysqlChatMemoryRepository implements ChatMemoryRepository {
     public static final String META_COMPLETION_TOKENS = "completionTokens";
     public static final String META_LATENCY_MS = "latencyMs";
     public static final String META_REF_DOC_GUIDS = "refDocGuids";
+    /** 引用详情JSON串（由 RagChatService 序列化，此处不解析直接落 ref_json 列） */
+    public static final String META_REF_JSON = "refJson";
 
     private final ChatMessageMapper chatMessageMapper;
     private final ChatSessionMapper chatSessionMapper;
@@ -122,6 +124,8 @@ public class MysqlChatMemoryRepository implements ChatMemoryRepository {
         row.setLatencyMs(intValue(metadata.get(META_LATENCY_MS)));
         Object refDocGuids = metadata.get(META_REF_DOC_GUIDS);
         row.setRefDocGuids(refDocGuids != null ? refDocGuids.toString() : null);
+        Object refJson = metadata.get(META_REF_JSON);
+        row.setRefJson(refJson != null ? refJson.toString() : null);
     }
 
     private Integer intValue(Object v) {

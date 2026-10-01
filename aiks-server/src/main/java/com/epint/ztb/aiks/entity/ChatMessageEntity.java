@@ -24,6 +24,8 @@ public class ChatMessageEntity {
     private String content;
     /** 回答引用的文档GUID，逗号分隔 */
     private String refDocGuids;
+    /** 回答引用详情JSON（[{refNo,docGuid,lawName,articleNo,chapterName,snippet,score}]），回看历史时还原〔n〕出处 */
+    private String refJson;
     private Integer promptTokens;
     private Integer completionTokens;
     private Integer latencyMs;

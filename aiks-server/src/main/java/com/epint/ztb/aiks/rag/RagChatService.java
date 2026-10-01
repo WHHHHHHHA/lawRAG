@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -59,11 +61,12 @@ public class RagChatService {
     private final ChatSessionMapper chatSessionMapper;
     private final MysqlChatMemoryRepository chatMemoryRepository;
     private final AiksProperties props;
+    private final ObjectMapper objectMapper;
 
     public RagChatService(RetrievalService retrievalService, RagPromptBuilder promptBuilder,
             CitationResolver citationResolver, OpenAiChatModel chatModel,
             ChatSessionMapper chatSessionMapper, MysqlChatMemoryRepository chatMemoryRepository,
-            AiksProperties props) {
+            AiksProperties props, ObjectMapper objectMapper) {
         this.retrievalService = retrievalService;
         this.promptBuilder = promptBuilder;
         this.citationResolver = citationResolver;
@@ -71,6 +74,7 @@ public class RagChatService {
         this.chatSessionMapper = chatSessionMapper;
         this.chatMemoryRepository = chatMemoryRepository;
         this.props = props;
+        this.objectMapper = objectMapper;
     }
 
     public AskResult ask(AskRequest request) {
@@ -183,7 +187,7 @@ public class RagChatService {
     }
 
     /**
-     * 追加写入会话记忆：用户问题原文 + 携带用量元数据的回答。
+     * 追加写入会话记忆：用户问题原文 + 携带用量与引用元数据的回答。
      */
     private void saveExchange(String sessionId, String question, String answer,
             List<ReferenceItem> references, int promptTokens, int completionTokens, int latencyMs) {
@@ -195,11 +199,27 @@ public class RagChatService {
             assistantMetadata.put(MysqlChatMemoryRepository.META_REF_DOC_GUIDS,
                     references.stream().map(ReferenceItem::docGuid).distinct()
                             .collect(Collectors.joining(",")));
+            // 完整引用详情序列化落库（ref_json 列），回看历史会话时还原〔n〕出处；
+            // 序列化失败时跳过该 key（metadata 不允许 null 值），消息本身照常落库
+            String refJson = toJson(references);
+            if (refJson != null) {
+                assistantMetadata.put(MysqlChatMemoryRepository.META_REF_JSON, refJson);
+            }
         }
         chatMemoryRepository.saveAll(sessionId, List.of(
                 new UserMessage(question),
                 // Spring AI 1.0.0 无 AssistantMessage.builder()（1.1 才引入），用构造函数传入 metadata
                 new AssistantMessage(answer, assistantMetadata)));
+    }
+
+    private String toJson(List<ReferenceItem> references) {
+        try {
+            return objectMapper.writeValueAsString(references);
+        } catch (Exception e) {
+            // 序列化失败不影响主流程：引用详情丢失但消息本身照常落库
+            log.warn("引用详情序列化失败，ref_json 将为空", e);
+            return null;
+        }
     }
 
     /** 读取最近 N 条历史（读侧窗口裁剪，全量留痕仍在库中） */

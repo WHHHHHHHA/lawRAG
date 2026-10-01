@@ -54,4 +54,22 @@ public final class ChatDtos {
             Integer promptTokens,
             Integer completionTokens) {
     }
+
+    /** 会话历史消息（留痕表行 + 反序列化的引用详情） */
+    public record ChatMessageItem(
+            String msgGuid,
+            String sessionId,
+            /** user / assistant */
+            String role,
+            String content,
+            /** assistant 消息：回答中〔n〕对应的结构化出处（与实时问答 references 同构）；user 消息为 null */
+            List<ReferenceItem> references,
+            /** 引用的文档GUID，逗号分隔（冗余保留，便于按文档统计） */
+            String refDocGuids,
+            Integer promptTokens,
+            Integer completionTokens,
+            Integer latencyMs,
+            Long seq,
+            java.time.LocalDateTime createDate) {
+    }
 }
