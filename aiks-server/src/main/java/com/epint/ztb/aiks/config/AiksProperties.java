@@ -57,6 +57,8 @@ public class AiksProperties {
         private Double similarityThreshold = 0.55;
         /** 会话历史窗口消息数 */
         private Integer historyMaxMessages = 20;
+        /** 检索 0 命中时兜底回答的最大 token 数（寒暄引导/未命中提示均为短回答） */
+        private Integer fallbackMaxTokens = 256;
     }
 
     @Data

@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * RAG 提示词构造：
  * - 系统提示词：classpath:prompts/rag-system.st（引用规范/拒答规范/防注入约束）
+ * - 兜底提示词：classpath:prompts/rag-fallback.st（检索 0 命中时区分寒暄与未命中的法规问题）
  * - 用户消息：编号法规片段 + 定界符包裹的用户问题
  */
 @Slf4j
@@ -26,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class RagPromptBuilder {
 
     private String systemPrompt;
+    private String fallbackSystemPrompt;
 
     @PostConstruct
     public void loadSystemPrompt() {
@@ -34,10 +36,19 @@ public class RagPromptBuilder {
         } catch (IOException e) {
             throw new AiksException(AiksErrorCode.SERVICE_DEGRADED, "系统提示词文件加载失败: prompts/rag-system.st");
         }
+        try (InputStream in = new ClassPathResource("prompts/rag-fallback.st").getInputStream()) {
+            fallbackSystemPrompt = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new AiksException(AiksErrorCode.SERVICE_DEGRADED, "兜底提示词文件加载失败: prompts/rag-fallback.st");
+        }
     }
 
     public String systemPrompt() {
         return systemPrompt;
+    }
+
+    public String fallbackSystemPrompt() {
+        return fallbackSystemPrompt;
     }
 
     /**

@@ -35,8 +35,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * RAG 问答主流程：
- * 会话保障 → 向量检索（0命中时代码层固定拒答，不依赖模型自觉）→ 拼装 prompt
- * （系统提示词 + 会话历史窗口 + 编号片段用户消息）→ 大模型生成 → 引用解析 → 记忆落库。
+ * 会话保障 → 向量检索（0命中时走大模型兜底：区分寒暄/无关问题与未命中的法规问题，
+ * 调用失败再降级为固定话术）→ 拼装 prompt（系统提示词 + 会话历史窗口 + 编号片段
+ * 用户消息）→ 大模型生成 → 引用解析 → 记忆落库。
  *
  * 说明：不使用 MessageWindowChatMemory.add()——其窗口裁剪为"全删+重写"实现，
  * 会破坏本服务 append-only 的消息留痕表（丢失 token/延迟等元数据）。
@@ -48,6 +49,8 @@ public class RagChatService {
 
     private static final String FALLBACK_ANSWER =
             "现有法规库中未找到该问题的直接依据。建议您：1）尝试更换问法或使用法规中的规范表述；2）确认相关法规文件是否已录入知识库。";
+
+    // FALLBACK_ANSWER 现仅作为兜底路径中大模型调用失败时的最终降级话术，正常兜底回答见 prompts/rag-fallback.st
 
     private final RetrievalService retrievalService;
     private final RagPromptBuilder promptBuilder;
@@ -83,11 +86,7 @@ public class RagChatService {
         // 2. 向量检索
         List<Document> fragments = retrievalService.retrieve(question, request.topK());
         if (fragments.isEmpty()) {
-            log.info("检索无命中，代码层固定拒答: sessionId={}", sessionId);
-            int latency = (int) (System.currentTimeMillis() - start);
-            saveExchange(sessionId, question, FALLBACK_ANSWER, List.of(), 0, 0, latency);
-            return new AskResult(sessionId, FALLBACK_ANSWER, true, List.of(),
-                    new UsageInfo(0, 0), latency);
+            return fallbackAnswer(sessionId, question, start);
         }
 
         // 3. 拼装消息：系统提示词 + 历史窗口（读侧裁剪）+ 编号片段用户消息
@@ -124,6 +123,45 @@ public class RagChatService {
         log.info("问答完成: sessionId={}, 引用数={}, tokens={}/{}, latency={}ms",
                 sessionId, references.size(), promptTokens, completionTokens, latency);
         return new AskResult(sessionId, answer, false, references,
+                new UsageInfo(promptTokens, completionTokens), latency);
+    }
+
+    /**
+     * 检索 0 命中时的兜底回答：调用大模型（专用兜底提示词，见 prompts/rag-fallback.st）
+     * 区分「寒暄/与法规无关的问题」（礼貌回应并引导）与「未命中的法规问题」（输出未命中提示）。
+     * 大模型调用失败时降级为固定话术 FALLBACK_ANSWER，保证兜底路径始终可用。
+     * 返回的 fallback=true 仅表示检索无命中、无引用出处。
+     */
+    private AskResult fallbackAnswer(String sessionId, String question, long start) {
+        log.info("检索无命中，走大模型兜底回答: sessionId={}", sessionId);
+        String answer = FALLBACK_ANSWER;
+        int promptTokens = 0;
+        int completionTokens = 0;
+        try {
+            List<Message> messages = new ArrayList<>();
+            messages.add(new SystemMessage(promptBuilder.fallbackSystemPrompt()));
+            messages.addAll(recentHistory(sessionId));
+            messages.add(new UserMessage(question));
+            ChatResponse response = chatModel.call(new Prompt(messages,
+                    OpenAiChatOptions.builder()
+                            .model(props.getChat().getModel())
+                            .temperature(props.getChat().getTemperature())
+                            .maxTokens(props.getRag().getFallbackMaxTokens())
+                            .build()));
+            String text = response.getResult() != null && response.getResult().getOutput() != null
+                    ? response.getResult().getOutput().getText() : null;
+            if (text != null && !text.isBlank()) {
+                answer = text;
+            }
+            Usage usage = response.getMetadata().getUsage();
+            promptTokens = usage != null && usage.getPromptTokens() != null ? usage.getPromptTokens() : 0;
+            completionTokens = usage != null && usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0;
+        } catch (Exception e) {
+            log.warn("兜底大模型调用失败，降级为固定话术: sessionId={}", sessionId, e);
+        }
+        int latency = (int) (System.currentTimeMillis() - start);
+        saveExchange(sessionId, question, answer, List.of(), promptTokens, completionTokens, latency);
+        return new AskResult(sessionId, answer, true, List.of(),
                 new UsageInfo(promptTokens, completionTokens), latency);
     }
 

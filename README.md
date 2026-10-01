@@ -91,14 +91,14 @@ aiks-server/src/main/java/com/epint/ztb/aiks/
 └── resources/
     ├── application.yml        全部可配置项（含注释）
     ├── schema-aiks.sql        aiks 库建表脚本（7 张表）
-    └── prompts/rag-system.st  系统提示词（引用规范/拒答规范/防注入）
+    └── prompts/             rag-system.st 系统提示词（引用规范/拒答规范/防注入）、rag-fallback.st 兜底提示词（寒暄引导/未命中提示）
 ```
 
 ## 数据与边界说明
 
 - **向量可重建**：`aiks_doc_chunk` 是权威数据源，向量本体只在向量库文件中；revectorize 接口可按文档重建。**更换 embedding 模型后必须全量重嵌入**（维度与语义空间不同）。
 - **扫描件不支持**：上传文档提取文本 < 500 字符（默认）时置 FAILED，OCR 为二期项。
-- **拒答兜底**：检索 0 命中时返回固定话术（`fallback=true`），不调用大模型，不依赖模型自觉。
+- **拒答兜底**：检索 0 命中时走大模型兜底（`rag-fallback.st`）——寒暄/无关问题礼貌引导，法规问题未命中给提示话术；模型调用失败降级为固定话术（`fallback=true` 均表示无检索命中、无引用）。
 - **会话历史**：窗口默认 20 条（`aiks.rag.history-max-messages`），全量消息留痕在 `aiks_chat_message`。
 - **已知暂缓项**（见《AI法规问答模块实施计划.md》）：限流、敏感词过滤、token 用量落库统计、运行时配置接口、平台侧对接（ztb-aiks-impl/sdk）、流式输出、网页 UI。
 

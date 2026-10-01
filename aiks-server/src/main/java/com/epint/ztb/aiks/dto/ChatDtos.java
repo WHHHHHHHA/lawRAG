@@ -30,7 +30,7 @@ public final class ChatDtos {
     public record AskResult(
             String sessionId,
             String answer,
-            /** true=检索无命中，answer 为固定拒答话术，非模型生成 */
+            /** true=检索无命中，answer 为兜底回答（模型按兜底提示词生成：寒暄引导或未命中提示，调用失败时为固定话术），references 为空 */
             boolean fallback,
             List<ReferenceItem> references,
             UsageInfo usage,
